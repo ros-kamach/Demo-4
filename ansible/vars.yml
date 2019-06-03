@@ -1,0 +1,35 @@
+jenkins_user: jenkins
+jenkins_pass: jenkins85g
+download_folder: /opt
+jenkins_download_url: http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
+jenkins_key_url: http://pkg.jenkins-ci.org/redhat/jenkins-ci.org.key
+jenkins_repo_path: /etc/yum.repos.d/jenkins.repo
+jenkins_local: localhost:8080
+jenkins_home_dir: /var/lib/jenkins
+maven_download_url: https://www-us.apache.org/dist/maven/maven-3/3.6.0/binaries/apache-maven-3.6.0-bin.tar.gz
+maven_path: "{{download_folder}}/apache-maven-3.6.0"
+maven_env_file: /etc/profile.d/maven.sh
+amazon_corretto_jdk_url: https://d1f2yzg3dx5xke.cloudfront.net/java-1.8.0-amazon-corretto-devel-1.8.0_202.b08-1.amzn2.x86_64.rpm
+amazon_corretto_jre_url: https://d1f2yzg3dx5xke.cloudfront.net/java-1.8.0-amazon-corretto-1.8.0_202.b08-1.amzn2.x86_64.rpm
+nodesource_remote: https://rpm.nodesource.com/setup_8.x
+nodesource_local: /tmp/templates/node.sh
+
+
+workspace: /tmp
+sonar_download_validate_certs: true
+
+# Default release sonarqube.
+sonar_version: 7.7
+sonar_download_url: "https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-{{ sonar_version }}.zip"
+sonar_version_directory: "sonarqube-{{ sonar_version }}"
+
+sonar_web_context: ''
+
+# pqsql database connection details.
+sonar_pqsql_username: 'sonaruser'
+sonar_pqsql_password: 'Sonar123456'
+sonar_pqsql_database: 'sonarbase'
+sonar_pqsql_host: localhost
+sonar_pqsql_port: "5432"
+postgresql_version: "11"
+postgresql_cluster_symlink_src: ""

@@ -1,0 +1,213 @@
+---
+- name: Download jenkins repo
+  get_url:
+    url: "{{ jenkins_download_url }}"
+    dest: "{{ jenkins_repo_path }}"
+
+- name: Import Jenkins CI key 
+  rpm_key:
+    key: "{{jenkins_key_url}}"
+    state: present
+ 
+- name: Install Jenkins
+  package:
+    name: jenkins
+    state: latest
+ 
+- name: Start the server
+  service:
+    name: jenkins
+    state: started
+- wait_for: 
+    port: 8080
+
+- name: Wait until the file Jenkins sectets is present before continuing
+  wait_for:
+    path: /var/lib/jenkins/secrets/initialAdminPassword    
+
+- name: Read Jankins admin password
+  command: cat /var/lib/jenkins/secrets/initialAdminPassword
+  register: adminpwd
+
+- name: Wait untils Jenkins web will be available
+  uri:
+    url: "http://{{ jenkins_local }}/login"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 15
+  delay: 5
+
+- name: Unlock  Jenkins and add User 
+  jenkins_script:
+   script: |
+    import jenkins.model.*
+    import hudson.security.*
+    def instance = Jenkins.getInstance()
+    def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+    hudsonRealm.createAccount('${user_name}', '${user_pwd}')
+    instance.setSecurityRealm(hudsonRealm)
+    def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+    strategy.setAllowAnonymousRead(false)
+    instance.setAuthorizationStrategy(strategy)
+    instance.save()
+    def inst = Jenkins.getInstance()
+    def desc = inst.getDescriptor("hudson.tasks.Maven")
+    def minst =  new hudson.tasks.Maven.MavenInstallation("Maven_name", "/opt/maven");
+    desc.setInstallations(minst)
+    desc.save()
+   args:
+    user_name: "{{jenkins_user}}"
+    user_pwd: "{{jenkins_pass}}" 
+   user: admin
+   password: "{{ adminpwd.stdout }}"
+
+- name: complete setup wizard
+  jenkins_script:
+   script: |
+    import static jenkins.model.Jenkins.instance as jenkins
+    import jenkins.install.InstallState
+    if (!jenkins.installState.isSetupComplete()) {
+      InstallState.INITIAL_SETUP_COMPLETED.initializeState()
+    }
+   user: admin
+   password: "{{ adminpwd.stdout }}"
+
+- name: Install plugins
+  include: /tmp/ansible/jenkins_plugins.yml
+  with_items:
+      - ansible
+      - google-oauth-plugin
+      - google-container-registry-auth
+      - docker-plugin
+      - docker-build-publish
+      - sonar  
+      - disk-usage
+      - dashboard-view
+      - cloudbees-folder
+      - antisamy-markup-formatter
+      - build-name-setter
+      - build-timeout
+      - config-file-provider
+      - credentials-binding
+      - embeddable-build-status
+      - throttle-concurrents
+      - timestamper
+      - ws-cleanup
+      - msbuild
+      - nodejs
+      - checkstyle
+      - cobertura
+      - htmlpublisher
+      - xunit
+      - workflow-aggregator
+      - github-organization-folder
+      - pipeline-stage-view
+      - build-pipeline-plugin
+      - conditional-buildstep
+      - jenkins-multijob-plugin
+      - parameterized-trigger
+      - copyartifact
+      - bitbucket
+      - clearcase
+      - cvs
+      - git
+      - git-parameter
+      - github
+      - gitlab-plugin
+      - p4
+      - repo
+      - subversion
+      - teamconcert
+      - tfs
+      - matrix-project
+      - ssh-slaves
+      - windows-slaves
+      - matrix-auth
+      - pam-auth
+      - ldap
+      - role-strategy
+      - active-directory
+      - email-ext
+      - emailext-template
+      - mailer
+      - publish-over-ssh
+    
+  loop_control:
+    loop_var: plugin_name
+  tags: [jenkins]
+
+- name: Configure jenkins plugins
+  copy:
+    src: "{{ item }}"
+    dest: /var/lib/jenkins
+    owner: jenkins
+    group: jenkins
+    mode: 0644
+  with_items:
+    - ../templates/jenkins_jobs_and_plugins_configuration/jenkins.plugins.publish_over_ssh.BapSshPublisherPlugin.xml
+    - ../templates/jenkins_jobs_and_plugins_configuration/hudson.plugins.sonar.SonarGlobalConfiguration.xml
+    - ../templates/jenkins_jobs_and_plugins_configuration/hudson.plugins.sonar.SonarRunnerInstallation.xml
+    - ../templates/jenkins_jobs_and_plugins_configuration/hudson.plugins.git.GitTool.xml
+
+- name: Restart jenkins
+  shell: "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080/ -auth admin:{{ adminpwd.stdout }} safe-restart"
+
+- name: Wait untils Jenkins web will be available
+  uri:
+    url: "http://{{ jenkins_local }}/login"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 25
+  delay: 5    
+
+- name: Download NodeSource repository
+  get_url:
+    url: "{{ nodesource_remote }}"
+    dest: "{{ nodesource_local }}"
+
+- name: Add NodeSource repository
+  command: sh "{{ nodesource_local }}"
+
+- name: Install Node.js
+  package:
+    name: nodejs
+    state: latest
+
+- name: Install Node.js packages globally.
+  npm:
+    name: "{{ item }}"
+    global: yes
+  with_items:
+     - yarn
+     - '@angular/cli'
+
+- name: Create job_backend from xml-file
+  jenkins_job:
+    config: "{{ lookup('file', '../templates/job_backend.xml') }}"
+    name: job_backend
+    password: "{{ adminpwd.stdout }}" 
+    url: http://localhost:8080
+    user: "admin"
+
+- name: Create job_frontend from xml-file
+  jenkins_job:
+    config: "{{ lookup('file', '../templates/job_frontend.xml') }}"
+    name: job_frontend
+    password: "{{ adminpwd.stdout }}" 
+    url: http://localhost:8080
+    user: "admin"
+
+- name: Restart jenkins
+  shell: "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080/ -auth admin:{{ adminpwd.stdout }} safe-restart"
+
+- name: Wait untils Jenkins web will be available
+  uri:
+    url: "http://{{ jenkins_local }}/login"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 25
+  delay: 5
+...

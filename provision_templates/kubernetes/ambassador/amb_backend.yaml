@@ -1,0 +1,29 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eschool-backend-service
+  annotations:
+    getambassador.io/config: |
+      ---
+      apiVersion: ambassador/v1
+      kind:  Mapping
+      name:  backend_mapping
+      prefix: /
+      host: api2.eschool.chaincorp.info
+      service: eschool-backend-service
+      ---
+      apiVersion: ambassador/v1
+      kind:  Mapping
+      name:  redirect_mapping
+      prefix: /api/
+      service: api2.eschool.chaincorp.info
+      host_redirect: true
+      path_redirect: /
+spec:
+  selector:
+    app: eschool-backend
+  ports:
+  - port: 80
+    name: port-backend
+    targetPort: 8080

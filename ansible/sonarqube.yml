@@ -1,0 +1,139 @@
+---
+- name: PostgreSQL Repo
+  package:
+    name: https://download.postgresql.org/pub/repos/yum/11/redhat/rhel-7-x86_64/pgdg-redhat11-11-2.noarch.rpm
+    state: present
+
+- name: install PostgreSQL packages
+  package: pkg={{ item }} state=present
+  with_items:
+    - postgresql11-server
+    - python-psycopg2
+    - postgresql11
+    - unzip
+  tags: postgresq
+
+- name: Initiate database
+  command: /usr/pgsql-11/bin/postgresql-11-setup initdb
+
+- name: Start service PostgreSQL
+  service:
+    name: postgresql-11       
+    state: started
+    enabled: yes
+
+- name: Create PostgreSQL User
+  become_user: postgres
+  postgresql_user:
+    name: "{{ sonar_pqsql_username }}"
+    password: "{{ sonar_pqsql_password }}"
+    role_attr_flags: CREATEDB,NOSUPERUSER
+
+- name: Create PostgreSQL DB
+  become_user: postgres
+  postgresql_db:
+    name: "{{ sonar_pqsql_database }}"
+    encoding: UTF-8
+    lc_collate: de_DE.UTF-8
+    lc_ctype: de_DE.UTF-8
+    template: template0
+
+- name: Create PostgreSQL DB
+  become_user: postgres
+  postgresql_privs:
+    db: "{{ sonar_pqsql_database }}"
+    privs: ALL
+    type: database
+    role: "{{ sonar_pqsql_username }}"
+
+- name: PostgreSQL Translation port and Listening Addresses
+  lineinfile:
+    dest: /var/lib/pgsql/11/data/postgresql.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - regexp: "#listen_addresses = 'localhost'"
+      line: "listen_addresses = '*'"
+    - regexp: "#port = 5432"
+      line: "port = {{ sonar_pqsql_port }}"
+
+- name: Start PostgreSQL
+  service:
+    name: postgresql-11
+    state: started
+
+- name: Copy PostgreSQL config
+  template:
+    src: ../templates/pg_hba.conf.j2
+    dest: /var/lib/pgsql/11/data/pg_hba.conf
+
+- name: Restart PostgreSQL
+  service:
+    name: postgresql-11
+    state: restarted
+
+- name: Download Sonar.
+  get_url:
+    url: "{{ sonar_download_url }}"
+    dest: "{{ workspace }}/{{ sonar_version_directory }}.zip"
+    validate_certs: "{{ sonar_download_validate_certs }}"
+
+- name: Download Sonar.
+  get_url:
+    url: "{{ sonar_download_url }}"
+    dest: "{{ workspace }}/{{ sonar_version_directory }}.zip"
+    validate_certs: "{{ sonar_download_validate_certs }}"
+
+- name: Unzip Sonar.
+  unarchive:
+    src: "{{ workspace }}/{{ sonar_version_directory }}.zip"
+    dest: "{{ download_folder }}"
+    owner: centos
+    group: centos
+    copy: false
+    creates: "{{ download_folder }}/sonar/COPYING"
+
+- name: Move Sonar into place.
+  command: >
+    mv {{ download_folder }}/{{ sonar_version_directory }} {{ download_folder }}/sonar
+    creates={{ download_folder }}/sonar/COPYING
+
+- include: sonar_config.yml
+
+- name: Sonar run script as centos
+  lineinfile:
+    dest: "{{ download_folder }}/sonar/bin/linux-x86-64/sonar.sh"
+    regexp: "#RUN_AS_USER="
+    line: "RUN_AS_USER=centos"
+
+- name: Symlink sonar bin.
+  file:
+    src: "{{ download_folder }}/sonar/bin/linux-x86-64/sonar.sh"
+    dest: /usr/bin/sonar
+    state: link
+  register: sonar_symlink
+
+- name: Add sonar as init script for service management.
+  file:
+    src: "{{ download_folder }}/sonar/bin/linux-x86-64/sonar.sh"
+    dest: /etc/init.d/sonar
+    state: link
+  when: "ansible_service_mgr != 'systemd'"
+
+- name: Copy SonarQube systemd unit file into place (for systemd systems).
+  template:
+    src: ../templates/sonar.unit.j2
+    dest: /etc/systemd/system/sonar.service
+    owner: root
+    group: root
+    mode: 0755
+  when: "ansible_service_mgr == 'systemd'"
+
+- name: Ensure Sonar is running and set to start on boot.
+  service: name=sonar state=started enabled=yes
+
+- name: Allow Sonar time to build on first start.
+  pause: seconds=180
+  when: sonar_symlink.changed
+  tags: ['skip_ansible_lint']
+...

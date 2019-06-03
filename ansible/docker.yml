@@ -1,0 +1,89 @@
+---
+    - name: Install yum utils
+      yum:
+        name: yum-utils
+        state: latest
+
+    - name: Install device-mapper-persistent-data
+      yum:
+        name: device-mapper-persistent-data
+        state: latest
+
+    - name: Install lvm2
+      yum:
+        name: lvm2
+        state: latest
+
+    - name: Add Docker repo
+      get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docer-ce.repo
+      become: yes
+
+    - name: Install Docker
+      package:
+        name: docker-ce
+        state: latest
+      become: yes
+
+    - name: Install pip
+      package: name=python-pip state=present
+    - name: install docker-py package
+      pip: name=docker-py
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Allow 'jenkins' group to have passwordless sudo
+      lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: '^%wheel'
+        line: 'jenkins ALL=(ALL) NOPASSWD: ALL'
+
+    - name: Install Google Cloud SDK
+      shell: gcloud auth configure-docker -q
+
+    - name: Download and Extract Google Cloud SDK into /temp
+      unarchive:
+        src: "https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz"
+        dest: /tmp
+        remote_src: yes
+
+    - name: Install GC SDK + kubectl
+      shell: "{{ item }}"
+      with_items:
+        - /tmp/google-cloud-sdk/install.sh --usage-reporting=false --path-update=true --quiet
+        - yum install kubelet kubeadm kubectl -y
+
+    - name: Specified Credentials for GCR 
+      shell: "{{ item }}"
+      with_items:
+        - /tmp/google-cloud-sdk/bin/gcloud auth activate-service-account --key-file  /tmp/ansible/.ssh/lucky-wonder-241907-4774caa1fd59.json
+        - docker login -u _json_key --password-stdin https://us.gcr.io < /tmp/ansible/.ssh/lucky-wonder-241907-4774caa1fd59.json 
+    
+    - name: Restart jenkins
+      shell: "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080/ -auth admin:{{ adminpwd.stdout }} safe-restart"
+
+    - name: Wait untils Jenkins web will be available
+      uri:
+        url: "http://{{ jenkins_local }}/login"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 25
+      delay: 5
+      
+    - name: Read Jankins admin password
+      command: cat /var/lib/jenkins/secrets/initialAdminPassword
+      register: adminpwd
+
+    - name: Build job_backend
+      shell: "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080/ -auth admin:{{ adminpwd.stdout }} build job_backend"
+
+    - name: Build job_frontend
+      shell: "java -jar /var/cache/jenkins/war/WEB-INF/jenkins-cli.jar -s http://localhost:8080/ -auth admin:{{ adminpwd.stdout }} build job_frontend"
+...

@@ -1,0 +1,15 @@
+- name: Start service firewalld, if not started
+  service:
+    name: firewalld       
+    state: started
+    enabled: yes    
+
+- name: Add http service firewalld
+  firewalld:
+    zone: public
+    port: 9000/tcp
+    permanent: yes
+    state: enabled
+
+- name: firewalld reload
+  command: firewall-cmd --reload

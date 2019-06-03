@@ -1,0 +1,10 @@
+### Terraform ###
+# General
+.DS_Store
+.terraform
+.ssh/
+provision_templates/kubernetes/Linkerd/
+*.json
+terraform.tfstate.backup
+terraform.tfstate
+.terraform.tfstate.lock.info

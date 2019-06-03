@@ -1,0 +1,10 @@
+#---------------------------------------------------------------------------
+# Dockefile to build eschool frontend
+#
+#---------------------------------------------------------------------------
+# Pull base image.
+FROM nginx:latest
+
+COPY ./eSchool ./usr/share/nginx/html/
+COPY ./nginx.conf ./etc/nginx/nginx.conf
+EXPOSE 80

@@ -1,0 +1,15 @@
+#---------------------------------------------------------------------------
+# Dockefile to deploy eschool backend
+#
+#---------------------------------------------------------------------------
+# Pull base image.
+FROM amazoncorretto:latest
+
+RUN \
+# Update
+yum update -y
+COPY ./eschool.jar ./app/eschool.jar
+COPY ./application.properties ./app/application.properties
+WORKDIR ./app
+EXPOSE 8080
+CMD ["java", "-jar", "eschool.jar", "application.properties"]

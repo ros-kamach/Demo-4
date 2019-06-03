@@ -1,0 +1,38 @@
+---
+- name: Read and make var Jenkins Admin Pass
+  command: cat /var/lib/jenkins/secrets/initialAdminPassword
+  register: adminpwd
+
+- name: Get Jenkins crumb
+  uri:
+    user: admin
+    password: "{{ adminpwd.stdout }}"
+    force_basic_auth: yes
+    url: "http://{{ jenkins_local }}/crumbIssuer/api/json"
+    return_content: yes
+  register: crumb_token
+  until: crumb_token.content.find('Please wait while Jenkins is getting ready') == -1
+  retries: 10
+  delay: 5
+  tags: [jenkins]
+
+- name: Finishing installation plugins
+  uri:
+    url: "http://{{ jenkins_local }}/pluginManager/installNecessaryPlugins"
+    method: POST
+    user: admin
+    password: "{{ adminpwd.stdout }}"
+    body: '<jenkins><install plugin="{{ plugin_name }}@latest" /></jenkins>'
+    force_basic_auth: True
+    status_code: 200,301,302
+    headers:
+      Content-Type: "text/xml"
+      Jenkins-Crumb: "{{ crumb_token.json.crumb }}"
+    creates: "{{ jenkins_home_dir }}/plugins/{{ plugin_name }}"
+  register: plugins_result
+  tags: [jenkins]
+
+- wait_for:
+    path: "{{ jenkins_home_dir }}/plugins/{{ plugin_name }}"
+  tags: [jenkins]
+...

@@ -1,0 +1,16 @@
+---
+- name: Configure SonarQube JDBC settings for pqsql.
+  lineinfile:
+    dest: "{{ download_folder }}/sonar/conf/sonar.properties"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - regexp: "^sonar.jdbc.username"
+      line: "sonar.jdbc.username={{ sonar_pqsql_username }}"
+    - regexp: "^sonar.jdbc.password"
+      line: "sonar.jdbc.password={{ sonar_pqsql_password }}"
+    - regexp: "^sonar.jdbc.url"
+      line: "sonar.jdbc.url=jdbc:postgresql://{{ sonar_pqsql_host }}:{{ sonar_pqsql_port }}/{{ sonar_pqsql_database }}?useUnicode=true&characterEncoding=utf8&rewriteBatchedStatements=true&useConfigs=maxPerformance"
+    - regexp: "^sonar.web.context"
+      line: "sonar.web.context={{ sonar_web_context }}"
+...
